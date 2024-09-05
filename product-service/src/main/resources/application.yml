@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: product-service
+  data:
+    mongodb:
+      username: amr
+      password: amr
+      host: localhost
+      port: 27017
+      database: product
+      authentication-database: admin
+server:
+  port: 8090
