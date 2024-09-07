@@ -1,11 +1,12 @@
 package com.amr.order.service;
 
 
-import com.amr.order.dto.InventoryResponse;
 import com.amr.order.dto.OrderRequest;
 import com.amr.order.dto.OrderResponse;
 import com.amr.order.exception.InvalidOrderRequestException;
 import com.amr.order.exception.ProductOutOfStockException;
+import com.amr.order.inventory.InventoryClient;
+import com.amr.order.inventory.InventoryResponse;
 import com.amr.order.mapper.OrderMapper;
 import com.amr.order.model.Order;
 import com.amr.order.model.OrderLineItems;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,11 +26,13 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
-    private final WebClient webClient;
+    //    private final WebClient webClient;
+    private final InventoryClient inventoryClient;
 
     public String placeOrder(OrderRequest request) {
         Order order = orderMapper.toOrder(request);
         order.setOrderNumber(UUID.randomUUID().toString());
+        // Check Inventory Service for product availability
         List<String> skuCodes = order.getOrderLineItems().stream()
                 .map(OrderLineItems::getSkuCode)
                 .toList();
@@ -40,7 +42,16 @@ public class OrderService {
         if (skuCodes.size() != quantities.size()) {
             throw new InvalidOrderRequestException("skuCodes and quantities must have the same size");
         }
-        // Check Inventory Service for product availability
+        List<InventoryResponse> inventoryResponses = inventoryClient.isInStock(skuCodes, quantities);
+        boolean AllProductsInStock = inventoryResponses.stream()
+                .allMatch(InventoryResponse::isInStock);
+        if (!AllProductsInStock) {
+            throw new ProductOutOfStockException("Some products are out of stock");
+        }
+        orderRepository.save(order);
+        return order.getOrderNumber();
+    }
+        /*
         InventoryResponse[] inventoryResponses = webClient.get()
                 .uri("http://localhost:8060/api/inventory",
                         uriBuilder -> uriBuilder
@@ -57,9 +68,8 @@ public class OrderService {
         if (!AllProductsInStock) {
             throw new ProductOutOfStockException("Some products are out of stock");
         }
-        orderRepository.save(order);
-        return order.getOrderNumber();
     }
+         */
 
     public List<OrderResponse> findAll() {
         return orderRepository.findAll().stream()
